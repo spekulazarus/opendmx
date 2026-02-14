@@ -31,14 +31,15 @@ python3 -m venv venv
 source venv/bin/activate
 
 # 5. Install Python Dependencies
-# We need to tell pip where to find the portaudio headers on macOS
 echo "🛠 Installing Python packages..."
-export C_INCLUDE_PATH=$(brew --prefix portaudio)/include
-export LIBRARY_PATH=$(brew --prefix portaudio)/lib
-
 pip install --upgrade pip
 pip install pyserial numpy flask mido python-rtmidi
-pip install --global-option='build_ext' --global-option="-I$(brew --prefix portaudio)/include" --global-option="-L$(brew --prefix portaudio)/lib" pyaudio
+
+# Modern, robust way to install pyaudio on macOS (Intel & Apple Silicon)
+echo "🎤 Special install for PyAudio..."
+export LDFLAGS="-L$(brew --prefix portaudio)/lib"
+export CPPFLAGS="-I$(brew --prefix portaudio)/include"
+pip install --no-cache-dir pyaudio
 
 echo ""
 echo "✅ SETUP COMPLETE!"
