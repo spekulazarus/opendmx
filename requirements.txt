@@ -1,0 +1,4 @@
+pyserial>=3.4
+pyaudio
+numpy
+flask
