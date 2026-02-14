@@ -3,7 +3,7 @@ import sys
 from dmx_sender import DMXSender
 from audio_analyzer import AudioAnalyzer
 from lighting_controller import LightingController
-from web_server import start_web_server
+from web_server import start_web_server, stop_web_server
 from midi_controller import MIDIController
 
 
@@ -40,8 +40,10 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        print("\nVJ SYSTEM SHUTTING DOWN...")
         analyzer.stop()
         sender.stop()
+        stop_web_server()
 
 
 if __name__ == "__main__":

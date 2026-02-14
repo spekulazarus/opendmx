@@ -16,21 +16,13 @@ class AudioAnalyzer:
         self.running = False
         self.on_beat_callback = None
 
-        self.threshold = 1.3
-        self.history_size = 40
-        self.history = deque(maxlen=self.history_size)
-
+        self.flux_history = deque(maxlen=128)
         self.last_beat_time = 0.0
-        self.min_interval = 0.36
+        self.min_interval = 0.25
 
         self.current_volume = 0.0
         self.current_device_name = "Searching..."
-
-        self.prev_energy = 0.0
-        self.energy_diff_history = deque(maxlen=15)
-
-        self.prev_fft = None
-        self.flux_threshold = 0.3
+        self.prev_log_mag = None
 
     def list_devices(self):
         devices = []
@@ -119,79 +111,61 @@ class AudioAnalyzer:
                 time.sleep(0.1)
                 continue
             try:
-                chunk_time = time.time()
+                t_capture = time.perf_counter()
                 data = self.stream.read(self.chunk, exception_on_overflow=False)
                 samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
 
-                # Precise Peak Time for Sync
-                peak_idx = np.argmax(np.abs(samples))
-                precise_time = chunk_time + (peak_idx / float(self.rate))
-
-                # Volume for UI
                 self.current_volume = float(np.max(np.abs(samples)) / 32768.0)
 
-                beat_detected = self._detect_beat(samples, precise_time)
+                beat_detected, precise_time = self._detect_beat(samples, t_capture)
+
                 if beat_detected and self.on_beat_callback:
                     self.on_beat_callback(precise_time)
             except Exception as e:
                 print(f"Audio Loop Error: {e}")
                 break
 
-    def _detect_beat(self, samples, current_time):
-        self.current_volume = np.max(np.abs(samples)) / 32768.0
-
+    def _detect_beat(self, samples, t_capture):
         fft = np.fft.rfft(samples)
+        mag = np.abs(fft)
+
         freqs = np.fft.rfftfreq(len(samples), 1.0 / self.rate)
+        bass_idx = np.where((freqs >= 20) & (freqs <= 200))[0]
+        bass_mag = mag[bass_idx]
 
-        bass_indices = np.where((freqs > 30) & (freqs < 85))[0]
-        if len(bass_indices) == 0:
-            return False
+        log_mag = np.log10(bass_mag + 1.0)
+        flux = 0.0
+        if self.prev_log_mag is not None and len(self.prev_log_mag) == len(log_mag):
+            flux = float(np.sum(np.maximum(0, log_mag - self.prev_log_mag)))
+        self.prev_log_mag = log_mag
 
-        bass_energy = np.mean(np.abs(fft[bass_indices]))
+        self.flux_history.append(flux)
 
-        energy_diff = bass_energy - self.prev_energy if self.prev_energy > 0 else 0
-        self.prev_energy = bass_energy
-        self.energy_diff_history.append(energy_diff)
+        if len(self.flux_history) > 20:
+            local_flux = list(self.flux_history)
+            threshold = np.median(local_flux) * 2.5 + 0.1
 
-        spectral_flux = 0.0
-        bass_fft_abs = np.abs(fft[bass_indices])
-        if self.prev_fft is not None and len(self.prev_fft) == len(bass_fft_abs):
-            flux_diff = bass_fft_abs - self.prev_fft
-            spectral_flux = np.sum(np.maximum(0, flux_diff))
-        self.prev_fft = bass_fft_abs
+            if flux > threshold:
+                now = time.perf_counter()
+                if now - self.last_beat_time > self.min_interval:
+                    peak_in_chunk = np.argmax(np.abs(samples))
+                    precise_t = t_capture + (peak_in_chunk / float(self.rate))
 
-        if len(self.history) >= 10:
-            avg_energy = np.mean(self.history)
-            avg_energy_diff = (
-                np.mean(self.energy_diff_history)
-                if len(self.energy_diff_history) > 5
-                else 0
-            )
+                    self.last_beat_time = now
+                    return True, precise_t
 
-            energy_trigger = (bass_energy > avg_energy * self.threshold) and (
-                energy_diff > avg_energy_diff * 1.2
-            )
-            flux_trigger = spectral_flux > self.flux_threshold
-
-            time_since_last = current_time - self.last_beat_time
-            if (energy_trigger or flux_trigger) and time_since_last > self.min_interval:
-                self.last_beat_time = current_time
-                self.history.append(bass_energy)
-                return True
-
-        self.history.append(bass_energy)
-        return False
+        return False, 0.0
 
 
 if __name__ == "__main__":
 
-    def my_beat_trigger():
-        print("BEAT! \U0001f941")
+    def test_cb(t):
+        print(f"BEAT at {t:.3f}")
 
-    analyzer = AudioAnalyzer()
-    analyzer.start(callback=my_beat_trigger)
+    a = AudioAnalyzer()
+    a.start(callback=test_cb)
     try:
         while True:
-            time.sleep(0.1)
-    except KeyboardInterrupt:
-        analyzer.stop()
+            time.sleep(1)
+    except:
+        a.stop()
