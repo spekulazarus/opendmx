@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Lightweight VJ Pro - Auto Setup Script for macOS
-# This script installs all dependencies and prepares the environment.
+# This script installs all dependencies including BlackHole audio routing.
 
 echo "🚀 Starting VJ Pro Setup..."
 
@@ -13,9 +13,10 @@ else
     echo "✅ Homebrew is already installed."
 fi
 
-# 2. Install PortAudio (required for PyAudio)
-echo "🔊 Installing PortAudio via Homebrew..."
+# 2. Install Audio Requirements
+echo "🔊 Installing Audio Dependencies (PortAudio & BlackHole)..."
 brew install portaudio
+brew install --cask blackhole-2ch
 
 # 3. Check for Python 3
 if ! command -v python3 &> /dev/null; then
@@ -35,7 +36,7 @@ echo "🛠 Installing Python packages..."
 pip install --upgrade pip
 pip install pyserial numpy flask mido python-rtmidi
 
-# Modern, robust way to install pyaudio on macOS (Intel & Apple Silicon)
+# Modern, robust way to install pyaudio on macOS
 echo "🎤 Special install for PyAudio..."
 export LDFLAGS="-L$(brew --prefix portaudio)/lib"
 export CPPFLAGS="-I$(brew --prefix portaudio)/include"
@@ -44,6 +45,7 @@ pip install --no-cache-dir pyaudio
 echo ""
 echo "✅ SETUP COMPLETE!"
 echo "------------------------------------------------"
+echo "IMPORTANT: Set your Mac Sound Output to 'BlackHole 2ch'"
 echo "To start the VJ System, run:"
 echo "source venv/bin/activate && python3 main.py"
 echo "------------------------------------------------"
